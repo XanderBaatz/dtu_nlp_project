@@ -6,6 +6,8 @@
 # Icon must end with two \r
 Icon
 
+# old
+src/movies_old/
 
 # Thumbnails
 ._*
@@ -194,3 +196,4 @@ cython_debug/
 # dbt
 dbt_packages/
 logs/
+.env.local
