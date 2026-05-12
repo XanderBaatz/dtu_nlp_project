@@ -49,7 +49,7 @@ dev = [
     "pymupdf>=1.27.2.3",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
-    "ruff>=0.14.14",
+    "ruff>=0.15.12",
     "sqlfluff>=4.0.0",
     "ty>=0.0.14",
 ]
