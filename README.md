@@ -1,435 +1,242 @@
-# Python Development with uv and Ruff
+# DTU NLP Project - Movie Discovery API
 
-<div align="center">
+A hybrid movie search and recommendation system built with BM25, sentence embeddings, LLM query expansion, and CPI-adjusted popularity ranking. ~62,000 IMDb movies from 1960–2024.
 
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
+**Dataset:** [Kaggle - Top 500–600 Movies per Year (1960–2024)](https://www.kaggle.com/datasets/raedaddala/top-500-600-movies-of-each-year-from-1960-to-2024/data)
 
-[![Versions](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13%20|%203.14%20-green.svg)](https://github.com/a5chin/python-uv)
-[![codecov](https://codecov.io/github/a5chin/python-uv/graph/badge.svg?token=M9JIB8T6R4)](https://codecov.io/github/a5chin/python-uv)
-
-[![Docker](https://github.com/a5chin/python-uv/actions/workflows/docker.yml/badge.svg)](https://github.com/a5chin/python-uv/actions/workflows/docker.yml)
-[![Format](https://github.com/a5chin/python-uv/actions/workflows/format.yml/badge.svg)](https://github.com/a5chin/python-uv/actions/workflows/format.yml)
-[![Lint](https://github.com/a5chin/python-uv/actions/workflows/lint.yml/badge.svg)](https://github.com/a5chin/python-uv/actions/workflows/lint.yml)
-
-</div>
-
-A production-ready Python development environment template using modern tools: **uv** for blazing-fast package management, **Ruff** for lightning-fast linting and formatting, **ty** for fast and reliable type checking, and **VSCode Dev Containers** for reproducible development environments.
-
-<div align="center">
-<img src="docs/img/ruff.gif" width="49%"> <img src="docs/img/jupyter.gif" width="49%">
-</div>
 
 ---
 
-## 📋 Table of Contents
+## Quick Start
 
-- [Python Development with uv and Ruff](#python-development-with-uv-and-ruff)
-  - [📋 Table of Contents](#-table-of-contents)
-  - [✨ Features](#-features)
-  - [🚀 Quick Start](#-quick-start)
-    - [Using Dev Container (Recommended)](#using-dev-container-recommended)
-    - [Using Docker Only](#using-docker-only)
-    - [Local Setup (Without Docker)](#local-setup-without-docker)
-  - [📚 Development Workflow](#-development-workflow)
-    - [Installing Dependencies](#installing-dependencies)
-    - [Running Tasks](#running-tasks)
-    - [Pre-commit Hooks](#pre-commit-hooks)
-    - [Documentation](#documentation)
-  - [🏗️ Project Structure](#️-project-structure)
-    - [Built-in Utility Modules](#built-in-utility-modules)
-      - [**Logger** - Dual-mode logging system](#logger---dual-mode-logging-system)
-      - [**Configuration** - Environment-based settings](#configuration---environment-based-settings)
-      - [**Timer** - Performance monitoring](#timer---performance-monitoring)
-  - [⚙️ Configuration](#️-configuration)
-    - [Ruff Configuration](#ruff-configuration)
-    - [ty Configuration](#ty-configuration)
-    - [Pytest Configuration](#pytest-configuration)
-  - [🔄 CI/CD](#-cicd)
-  - [🎨 VSCode Configuration](#-vscode-configuration)
-  - [🍪 Cookiecutter Templates](#-cookiecutter-templates)
-  - [📖 Documentation](#-documentation)
-  - [🌿 Branches](#-branches)
-  - [📄 License](#-license)
-  - [🙏 Acknowledgments](#-acknowledgments)
+### 1. Install dependencies
+```sh
+uv sync
+```
+
+### 2. Configure environment
+Copy `.env` and fill in your credentials in `.env.local` (never committed):
+```sh
+cp .env .env.local
+```
+
+Minimum required in `.env.local`:
+```ini
+CAMPUSAI_API_KEY=your-key-here        # for LLM query expansion + DSPy
+KAGGLE_API_TOKEN=your-token-here      # only needed to re-download the dataset
+```
+
+### 3. Download and process the dataset
+Only needed once (or when you want to refresh the data):
+```sh
+uv run python -m movies.downloader
+```
+This downloads the Kaggle dataset, cleans it, adds weighted ratings and CPI-adjusted gross, and saves it to `data/imdb_movies/processed/movies.parquet`.
+
+### 4. Build the search index
+Also only needed once (or after re-downloading):
+```sh
+uv run python -c "from movies.database import MovieDatabase; db = MovieDatabase(); db.build()"
+```
+This builds and saves the BM25 index (`bm25.pkl`), embedding matrix (`embeddings.npy`), and index ID map to `data/imdb_movies/index/`.
+
+### 5. Start the API
+```sh
+uv run uvicorn src.movies.main:app --reload --port 8000
+```
+Interactive Swagger UI: **http://127.0.0.1:8000/docs**
+
 
 ---
 
-## ✨ Features
+## Environment Variables
 
-- 🚀 **Ultra-fast package management** with [uv](https://github.com/astral-sh/uv) (10-100x faster than pip)
-- ⚡ **Lightning-fast linting & formatting** with [Ruff](https://github.com/astral-sh/ruff) (replacing Black, isort, Flake8, and more)
-- 🐳 **Dev Container ready** - Consistent development environment across all machines
-- 🔍 **Type checking** with ty
-- ✅ **Pre-configured testing** with pytest (75% coverage requirement)
-- 🔄 **Automated CI/CD** with GitHub Actions
-- 📦 **Reusable utilities** - Logger, configuration management, and performance tracing tools
-- 🎯 **Task automation** with nox
-- 🪝 **Pre-commit hooks** for automatic code quality checks
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IS_LOCAL` | `true` | Switches logger to coloured console output |
+| `CAMPUSAI_API_KEY` | _(empty)_ | CampusAI API key for LLM expansion + DSPy |
+| `CAMPUSAI_API_URL` | `https://api.campusai.compute.dtu.dk/v1/` | API base URL |
+| `CAMPUSAI_MODEL` | `google/gemma-4-26b-a4b` | LLM model name |
+| `CAMPUSAI_EMBED_MODEL` | `nomic/nomic-embed-text` | Embedding model (used when `LOCAL_EMBEDDING=false`) |
+| `LOCAL_EMBEDDING` | `true` | Use local `all-MiniLM-L6-v2` model instead of API |
+| `KAGGLE_API_TOKEN` | _(empty)_ | Kaggle token for dataset download |
+| `OPENAI_API_KEY` | _(empty)_ | Optional fallback if no CampusAI key |
 
-## 🚀 Quick Start
 
-### Using Dev Container (Recommended)
+---
 
-1. **Prerequisites**: Install [Docker](https://www.docker.com/) and [VSCode](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+## Docker
 
-2. **Open in container**:
-   ```bash
-   git clone https://github.com/a5chin/python-uv.git
-   cd python-uv
-   code .
-   ```
-   When prompted, click "Reopen in Container"
-
-3. **Start developing**:
-   ```bash
-   # Install dependencies
-   uv sync
-
-   # Run tests
-   uv run nox -s test
-
-   # Format and lint
-   uv run nox -s fmt
-   uv run nox -s lint -- --ruff --ty
-   ```
-
-### Using Docker Only
-
-```bash
-# Build the image
-docker build -t python-uv .
-
-# Run container
-docker run -it --rm -v $(pwd):/workspace python-uv
+Build:
+```sh
+docker build -f dockerfiles/api.dockerfile -t movies-api .
 ```
 
-### Local Setup (Without Docker)
-
-**Prerequisites**: Python 3.11+ and [uv](https://github.com/astral-sh/uv)
-
-```bash
-# Install uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone and setup
-git clone https://github.com/a5chin/python-uv.git
-cd python-uv
-
-# Install dependencies
-uv sync
-
-# Install pre-commit hooks (optional)
-uv run pre-commit install
+Run:
+```sh
+docker run -p 8002:8002 -v $(pwd)/data:/app/data \
+  --env-file .env \
+  -e CAMPUSAI_API_KEY=$CAMPUSAI_API_KEY \
+  movies-api
 ```
 
-## 📚 Development Workflow
+---
 
-### Installing Dependencies
+## API Endpoints
 
-```bash
-# Install all dependencies (including dev dependencies)
-uv sync
+All endpoints are prefixed with `/api/v1`. Full docs at `/docs`.
 
-# Install without dev dependencies
-uv sync --no-dev
-
-# Add new dependencies
-uv add requests pandas
-
-# Add dev dependencies
-uv add --dev pytest-mock
+### `GET /api/v1/health`
+Health check - returns index size and version.
+```sh
+curl http://127.0.0.1:8000/api/v1/health
 ```
 
-### Running Tasks
+### `GET /api/v1/search`
+Hybrid BM25 + semantic search with LLM query expansion and smart re-ranking.
 
-This project uses **nox** for task automation. All common development tasks are available as nox sessions:
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `query` | required | Free-text search query |
+| `top_k` | `10` | Number of results (1–100) |
+| `alpha` | `0.5` | Dense/sparse balance: `0`=pure BM25, `1`=pure semantic |
+| `weighted_rating_alpha` | `0.10` | Weight for IMDb rating signal |
+| `popularity_alpha` | `0.05` | Weight for CPI-adjusted box office signal |
+| `expand` | `true` | Enable LLM query expansion |
 
-```bash
-# Format code with Ruff
-uv run nox -s fmt
-
-# Run linters (Ruff + ty)
-uv run nox -s lint -- --ruff --ty
-
-# Run only ty
-uv run nox -s lint -- --ty
-
-# Run only Ruff linter
-uv run nox -s lint -- --ruff
-
-# Run tests with coverage (75% minimum required)
-uv run nox -s test
-
-# Run tests with JUnit XML output (for CI)
-uv run nox -s test -- --cov_report xml --junitxml junit.xml
+```sh
+curl "http://127.0.0.1:8000/api/v1/search?query=wizard+with+round+glasses&top_k=5"
+curl "http://127.0.0.1:8000/api/v1/search?query=Meryl+Streep+drama&expand=false"
+curl "http://127.0.0.1:8000/api/v1/search?query=space+thriller&alpha=0.8&popularity_alpha=0.1"
 ```
 
-You can also run tools directly:
-
-```bash
-# Run pytest directly
-uv run pytest
-
-# Run specific test file
-uv run pytest tests/tools/test__logger.py
-
-# Format with Ruff
-uv run ruff format .
-
-# Lint with Ruff
-uv run ruff check . --fix
-
-# Type check with ty
-uv run ty check
+### `GET /api/v1/movies/{imdb_id}`
+Fetch a single movie by its IMDb ID.
+```sh
+curl http://127.0.0.1:8000/api/v1/movies/tt0120338    # Titanic
 ```
 
-### Pre-commit Hooks
+### `GET /api/v1/movies/{imdb_id}/similar`
+Find movies similar to a given film, re-ranked with the same rating + popularity blend as search.
 
-Pre-commit hooks automatically run code quality checks before each commit:
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `top_k` | `10` | Number of results |
+| `weighted_rating_alpha` | `0.10` | Weight for IMDb rating |
+| `popularity_alpha` | `0.05` | Weight for CPI-adjusted gross |
 
-```bash
-# Install hooks
-uv run pre-commit install
-
-# Run manually on all files
-uv run pre-commit run --all-files
+```sh
+curl "http://127.0.0.1:8000/api/v1/movies/tt0120338/similar?top_k=5"
 ```
 
-Configured hooks:
-- Ruff formatting and linting
-- JSON, YAML, TOML validation
-- Trailing whitespace removal
-- End-of-file fixer
-- Private key detection
-- Dockerfile linting with hadolint
-
-### Documentation
-
-Generate and serve documentation with MkDocs:
-
-```bash
-# Serve locally at http://127.0.0.1:8000
-uv run mkdocs serve
-
-# Build static site
-uv run mkdocs build
-
-# Deploy to GitHub Pages
-uv run mkdocs gh-deploy
+### `GET /api/v1/lookup`
+Resolve a movie title (and optional year) to its IMDb ID and metadata.
+```sh
+curl "http://127.0.0.1:8000/api/v1/lookup?title=Titanic&year=1997"
 ```
 
-## 🏗️ Project Structure
-
-```
-.
-├── tools/                  # Reusable utility modules
-│   ├── config/             # Configuration management (Settings, FastAPI config)
-│   ├── logger/             # Logging utilities (Local & Google Cloud formatters)
-│   └── tracer/             # Performance tracing (Timer decorator/context manager)
-├── tests/                  # Test suite (mirrors tools/ structure)
-│   └── tools/              # Unit tests for utility modules
-├── docs/                   # MkDocs documentation
-│   ├── getting-started/    # Setup guides
-│   ├── guides/             # Tool usage guides
-│   ├── configurations/     # Configuration references
-│   └── usecases/           # Real-world examples
-├── .devcontainer/          # Dev Container configuration
-├── .github/                # GitHub Actions workflows, PR templates, and review checklists
-├── CODE_OF_CONDUCT.md      # Community Code of Conduct
-├── CONTRIBUTING.md         # Contribution guidelines
-├── CLAUDE.md               # Claude Code development guidance
-├── noxfile.py              # Task automation configuration (test, lint, fmt)
-├── pyproject.toml          # Project metadata and dependencies (uv)
-├── ruff.toml               # Ruff linter/formatter configuration
-└── pytest.ini              # Pytest configuration (75% coverage requirement)
+### `POST /api/v1/recommend`
+Search for movies and generate an LLM explanation (via DSPy `ChainOfThought`) for why they match the query.
+```sh
+curl -X POST http://127.0.0.1:8000/api/v1/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"query": "melancholic sci-fi about loneliness in space", "top_k": 5}'
 ```
 
-### Built-in Utility Modules
-
-The `tools/` package provides production-ready utilities that can be used in your projects:
-
-#### **Logger** - Dual-mode logging system
-
-Environment-aware logging with support for local development and cloud environments:
-
-```python
-from tools.logger import Logger, LogType
-
-# Local development (colored console output)
-logger = Logger(__name__, log_type=LogType.LOCAL)
-
-# Google Cloud (structured JSON logging)
-logger = Logger(__name__, log_type=LogType.GOOGLE_CLOUD, project="my-project")
-
-logger.info("Application started")
+### `POST /api/v1/movies/guess`
+Given a plot description, search for candidates and use the LLM to reason about which movie it is.
+```sh
+curl -X POST http://127.0.0.1:8000/api/v1/movies/guess \
+  -H "Content-Type: application/json" \
+  -d '{"description": "A boy learns he is a wizard and goes to a school for magic"}'
 ```
 
-#### **Configuration** - Environment-based settings
 
-Type-safe configuration management using Pydantic:
+---
 
-```python
-from tools.config import Settings
+## Architecture
 
-settings = Settings()  # Loads from .env and .env.local
-api_url = settings.api_prefix_v1
-is_debug = settings.DEBUG
+### Source layout
+```
+src/movies/
+  config.py       - Pydantic Settings (paths, API keys, tuning params)
+  downloader.py   - Kaggle download + dataset processing
+  preprocess.py   - Cleaning, normalization, weighted rating, CPI-adjusted gross
+  documents.py    - Builds flat text documents from movie rows (used by both indexes)
+  embedder.py     - Embedder protocol: LocalEmbedder (sentence-transformers) or OpenAIEmbedder
+  nlp.py          - QueryProcessor (spaCy), QueryExpander (LLM), ParsedQuery
+  scorer.py       - Pure scoring functions: zscore, rrf, person_boost, genre_boost
+  database.py     - MovieDatabase: build/load/search/similar/lookup/by_id
+  rag.py          - DSPy modules: Recommender (ChainOfThought), MovieGuesser
+  schema.py       - SearchResult dataclass
+  main.py         - FastAPI app + all endpoints
 ```
 
-#### **Timer** - Performance monitoring
+### Dataset processing ([downloader.py](src/movies/downloader.py), [preprocess.py](src/movies/preprocess.py))
 
-Automatic execution time logging for functions and code blocks:
+- Downloads ~62,000 movies from Kaggle (top 500–600 per year, 1960–2024)
+- Normalizes list columns (genres, cast, directors, writers), duration strings → minutes, budget/gross strings → floats
+- Adds IMDb-style **weighted rating** (Bayesian average against the dataset mean):
 
-```python
-from tools.tracer import Timer
+$$\mathrm{WR} = \frac{v}{v+m} \cdot R + \frac{m}{v+m} \cdot C$$
 
-# As context manager
-with Timer("database_query"):
-    result = db.query()  # Logs execution time automatically
+where $R$ = movie rating, $v$ = vote count, $m$ = 90th-percentile vote threshold, $C$ = dataset mean rating.
 
-# As decorator
-@Timer("process_data")
-def process_data(data):
-    return transform(data)  # Logs execution time when function completes
+- Adds **CPI-adjusted gross** using seasonally adjusted CPIAUCSL data (FRED, `data/cpi/CPIAUCSL.csv`):
+
+$$\mathrm{AdjustedGross} = \mathrm{gross\_us\_canada} \times \frac{\mathrm{CPI}_\text{today}}{\mathrm{CPI}_\text{release year}}$$
+
+This makes box-office revenue comparable across decades - Star Wars (1977) at $775M nominal becomes ~$4.2B in today's dollars. Unfortunately only about 1/3 of the dataset are non-null in `gross_us_canada`, so the null rows are given the median/mean gross.
+
+### Indexing ([database.py](src/movies/database.py))
+
+Two indexes are built from a single flat document per movie:
+```
+Title: Titanic | Desc: A love story aboard... | Genres: Drama, Romance | Cast: Leonardo DiCaprio, Kate Winslet | Directors: James Cameron
 ```
 
-## ⚙️ Configuration
+1. **Sparse - BM25** (`bm25s`): lemmatized, lowercased tokens via spaCy
+2. **Dense - sentence embeddings** (`all-MiniLM-L6-v2` locally, or `nomic-embed-text` via CampusAI): L2-normalized cosine similarity
 
-### Ruff Configuration
+A **reverse person index** is also built at load time: `lowercase_name → [row_indices]` for all directors, stars, and writers. Multi-word names are matched with word-boundary regex against the raw query, bypassing spaCy NER for reliable cast lookup.
 
-Ruff replaces multiple tools (Black, isort, Flake8, pydocstyle, pyupgrade, autoflake) with a single, fast tool.
+### Query Processing ([nlp.py](src/movies/nlp.py))
 
-**Key settings in `ruff.toml`:**
-- **Line length**: 88 (Black-compatible)
-- **Target Python**: 3.14
-- **Rules**: ALL enabled by default with specific exclusions
-- **Test files**: Exempt from `INP001` (namespace packages) and `S101` (assert usage)
+Three stages before search:
+1. **spaCy** (`en_core_web_sm`): lemmatization, stop-word removal, named entity recognition
+2. **Genre detection**: matched against known genre vocabulary extracted from the dataset
+3. **LLM query expansion** (`QueryExpander`): an OpenAI-compatible call turns a vague description like `"wizard with round glasses"` into concrete keywords - `harry potter hogwarts gryffindor fantasy magic` - which are fed into an additional BM25 pass
 
-> See [Ruff documentation](https://docs.astral.sh/ruff/) for customization options.
+### Hybrid Search + Re-ranking ([database.py](src/movies/database.py))
 
-### ty Configuration
-
-Static type checking for Python code.
-
-**Key settings in `ty.toml`:**
-- **Include**: `tools/` and `tests/` packages
-- **Exclude**: Cache directories (`__pycache__`, `.pytest_cache`, `.ruff_cache`, `.venv`)
-
-> See [ty documentation](https://github.com/astral-sh/ty) for advanced configuration.
-
-### Pytest Configuration
-
-Testing framework with coverage enforcement.
-
-**Key settings in `pytest.ini`:**
-- **Coverage requirement**: 75% minimum (including branch coverage)
-- **Test file pattern**: `test__*.py` (double underscore)
-- **Coverage reports**: HTML and terminal
-- **Import mode**: importlib
-
-> See [pytest documentation](https://docs.pytest.org/) for additional options.
-
-## 🔄 CI/CD
-
-Automated workflows ensure code quality and consistency. All workflows run on push and pull requests.
-
-**Available workflows in `.github/workflows/`:**
-
-| Workflow                   | Purpose                              | Tools Used       |
-| -------------------------- | ------------------------------------ | ---------------- |
-| `docker.yml`               | Validate Docker build                | Docker           |
-| `devcontainer.yml`         | Validate Dev Container configuration | devcontainer CLI |
-| `format.yml`               | Check code formatting                | Ruff             |
-| `labeler.yml`              | Add label in GitHub                  | GitHub           |
-| `lint.yml`                 | Run static analysis                  | Ruff, ty         |
-| `test.yml`                 | Run test suite with coverage         | pytest, coverage |
-| `gh-deploy.yml`            | Deploy documentation to GitHub Pages | MkDocs           |
-| `pr-agent.yml`             | Automated PR reviews                 | Qodo AI PR Agent |
-| `publish-devcontainer.yml` | Publish Dev Container image          | Docker, GHCR     |
-
-## 🎨 VSCode Configuration
-
-The Dev Container includes pre-configured extensions and settings for optimal Python development.
-
-**Python Development:**
-- **Ruff** - Fast linting and formatting
-- **ty** - Static type checking
-- **Python** - Core Python support
-- **autodocstring** - Automatic docstring generation
-- **python-indent** - Correct Python indentation
-
-**Code Quality:**
-- **GitLens** - Enhanced Git integration
-- **Error Lens** - Inline error highlighting
-- **indent-rainbow** - Visual indentation guide
-- **trailing-spaces** - Highlight trailing whitespace
-
-**File Support:**
-- **YAML**, **TOML**, **Markdown** - Configuration file support
-- **Docker** - Dockerfile and docker-compose support
-- **Material Icon Theme** - File icons
-
-**Editor Settings:**
-- ✅ Format on save (Python, JSON, YAML, TOML, Dockerfile)
-- ✅ Auto-trim trailing whitespace
-- ✅ Auto-insert final newline
-- ✅ Organize imports on save
-
-> **Troubleshooting**: If Ruff formatting doesn't work, reload the window: `Cmd+Shift+P` → "Developer: Reload Window"
-
-## 🍪 Cookiecutter Templates
-
-This repository can be used as a base template for various Python projects. Combine it with Cookiecutter to bootstrap project-specific setups:
-
-```bash
-# Install cookiecutter
-uv add --dev cookiecutter
-
-# Use a template
-uv run cookiecutter <template-url>
+```
+Query
+  │
+  ├─ BM25 ranking (sparse)         ─┐
+  └─ Embedding cosine sim (dense)   ┼─→ Reciprocal Rank Fusion (RRF) → candidate pool
+                                   ─┘
+          │
+          ├─ Inject: person-matched rows (reverse person index)
+          └─ Inject: top BM25 hits on LLM expansion tokens
+                                   │
+                           Re-score candidates:
+                             z(retrieval) × (1 − α_rating − α_pop)
+                           + z(weighted_rating) × α_rating
+                           + z(adjusted_gross)  × α_pop
+                           + person_boost  (+2.0 if cast/crew match)
+                           + genre_boost   (+1.0 if genre match)
+                                   │
+                                Top-k results
 ```
 
-**Recommended templates:**
+`alpha` controls BM25/dense balance (`0`=pure BM25, `1`=pure semantic). `weighted_rating_alpha` (default 0.10) and `popularity_alpha` (default 0.05) blend in the quality and box-office signals; the remainder goes to retrieval relevance.
 
-- **Data Science**: [cookiecutter-data-science](https://github.com/drivendataorg/cookiecutter-data-science) - Standardized data science project structure
-- **FastAPI**: [full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) - Full-stack web applications
-- **Django**: [cookiecutter-django](https://github.com/cookiecutter/cookiecutter-django) - Production-ready Django projects
-- **Flask**: [cookiecutter-flask](https://github.com/cookiecutter-flask/cookiecutter-flask) - Flask web applications
+### LLM Reasoning ([rag.py](src/movies/rag.py))
 
-## 📖 Documentation
+Uses DSPy `ChainOfThought` with two signatures:
+- **`Recommender`** - generates a natural-language explanation for why a set of retrieved movies matches a query (`/recommend`)
+- **`MovieGuesser`** - given a plot description and a candidate shortlist, reasons about which specific film is being described (`/movies/guess`)
 
-Comprehensive documentation is available at **[https://a5chin.github.io/python-uv](https://a5chin.github.io/python-uv)**
+Falls back gracefully (top search result / empty explanation) if no API key is configured.
 
-**Topics covered:**
-- 🚀 **Getting Started** - Docker, VSCode, Dev Containers setup
-- ⚙️ **Tool Configurations** - uv, Ruff, ty, pre-commit
-- 🧪 **Testing Strategies** - pytest, coverage, and best practices
-- 🛠️ **Utility Modules** - Config, logger, and tracer guides
-- 💡 **Use Cases** - Jupyter, FastAPI, OpenCV examples
 
-## 🌿 Branches
-
-This repository maintains multiple branches for different use cases:
-
-- **[main](https://github.com/a5chin/python-uv/tree/main)** - Current production-ready template (recommended)
-- **[jupyter](https://github.com/a5chin/python-uv/tree/jupyter)** - Archived: Jupyter-specific configuration
-- **[rye](https://github.com/a5chin/python-uv/tree/rye)** - Archived: Rye package manager version (replaced by uv)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-This template is built on top of excellent open-source tools:
-
-- **[uv](https://github.com/astral-sh/uv)** by Astral - Ultra-fast Python package manager
-- **[Ruff](https://github.com/astral-sh/ruff)** by Astral - Lightning-fast linter and formatter
-- **[ty](https://github.com/astral-sh/ty)** by Astral - Static type checker for Python
-- **[nox](https://nox.thea.codes/)** - Flexible task automation for Python
-- **[pytest](https://pytest.org/)** - Testing framework for Python
-- **[MkDocs](https://www.mkdocs.org/)** - Documentation site generator
-
-Special thanks to the open-source community for making these tools available!
